@@ -51,6 +51,8 @@ def build_job_service() -> AnalysisJobService:
         job_repository=SQLiteAnalysisJobRepository(settings.database_path),
         result_repository=SQLiteAnalysisResultRepository(settings.database_path),
         analysis_service=get_analysis_service(),
+        max_retries=settings.job_max_retries,
+        timeout_seconds=settings.job_timeout_seconds,
     )
 
 

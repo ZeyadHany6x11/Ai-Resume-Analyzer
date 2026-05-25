@@ -41,6 +41,10 @@ class AnalysisJobRepository(Protocol):
 
     def get(self, job_id: str) -> AnalysisJobRecord | None: ...
 
+    def find_stale(
+        self, statuses: list[str], older_than: str, limit: int = 100
+    ) -> list[AnalysisJobRecord]: ...
+
 
 class AnalysisResultRepository(Protocol):
     def save(self, job_id: str, result: dict) -> None: ...
@@ -120,6 +124,41 @@ class SQLiteAnalysisJobRepository:
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    def find_stale(
+        self, statuses: list[str], older_than: str, limit: int = 100
+    ) -> list[AnalysisJobRecord]:
+        if not statuses:
+            return []
+        placeholders = ",".join("?" for _ in statuses)
+        try:
+            with connect(self._database_path) as connection:
+                rows = connection.execute(
+                    f"""
+                    SELECT * FROM analysis_jobs
+                    WHERE status IN ({placeholders}) AND updated_at < ?
+                    ORDER BY updated_at ASC
+                    LIMIT ?
+                    """,
+                    (*statuses, older_than, limit),
+                ).fetchall()
+        except Exception as exc:
+            raise PersistenceError(f"Failed to load stale analysis jobs: {exc}") from exc
+
+        return [
+            AnalysisJobRecord(
+                id=row["id"],
+                status=row["status"],
+                input_type=row["input_type"],
+                cv_text=row["cv_text"],
+                cv_file=row["cv_file"],
+                job_description=row["job_description"],
+                error_message=row["error_message"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        ]
 
 
 class SQLiteAnalysisResultRepository:

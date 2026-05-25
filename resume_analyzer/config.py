@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     semantic_weight: float = Field(default=0.6, ge=0, le=1)
     skill_weight: float = Field(default=0.4, ge=0, le=1)
     max_upload_size_mb: int = 10
+    job_max_retries: int = Field(default=2, ge=0)
+    job_timeout_seconds: float = Field(default=120.0, gt=0)
+    stale_job_age_seconds: int = Field(default=3600, gt=0)
 
     model_config = SettingsConfigDict(
         env_prefix="RESUME_ANALYZER_",
