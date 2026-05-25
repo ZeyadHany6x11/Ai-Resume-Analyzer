@@ -5,7 +5,11 @@ from pathlib import Path
 
 
 def connect(database_path: str) -> sqlite3.Connection:
-    Path(database_path).parent.mkdir(parents=True, exist_ok=True) if Path(database_path).parent != Path(".") else None
+    (
+        Path(database_path).parent.mkdir(parents=True, exist_ok=True)
+        if Path(database_path).parent != Path(".")
+        else None
+    )
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
     return connection

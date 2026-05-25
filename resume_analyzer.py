@@ -9,21 +9,15 @@ Core analysis module with modular functions for:
 - Report generation
 """
 
+import io
 import re
 import string
-import io
 import warnings
-from typing import Union
-
-warnings.filterwarnings("ignore")
 
 import nltk
-from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-import PyPDF2
+from nltk.tokenize import word_tokenize
 
 from resume_analyzer.embeddings import HybridSimilarityProvider
 from resume_analyzer.parsers import DocumentParser
@@ -31,8 +25,10 @@ from resume_analyzer.ranking import RankingService
 from resume_analyzer.services import SkillExtractionService
 from skills_list import SKILLS_DATABASE
 
+warnings.filterwarnings("ignore")
 
 # ── NLTK resource bootstrap ──────────────────────────────────────────────────
+
 
 def _ensure_nltk_resources() -> None:
     """Download required NLTK data if not already present."""
@@ -64,6 +60,7 @@ def _try_load_sbert():
     global _MODEL, _USE_SBERT
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
+
         _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
         _USE_SBERT = True
     except Exception:
@@ -73,7 +70,8 @@ def _try_load_sbert():
 
 # ── 1. Text Extraction ───────────────────────────────────────────────────────
 
-def extract_text(source: Union[bytes, str, io.BytesIO]) -> str:
+
+def extract_text(source: bytes | str | io.BytesIO) -> str:
     """
     Extract plain text from a PDF (bytes / BytesIO) or a raw text string.
 
@@ -91,6 +89,7 @@ def extract_text(source: Union[bytes, str, io.BytesIO]) -> str:
 
 
 # ── 2. Text Preprocessing ────────────────────────────────────────────────────
+
 
 def preprocess_text(text: str) -> list:
     """
@@ -133,6 +132,7 @@ def preprocess_text(text: str) -> list:
 
 # ── 3. Skill Extraction ──────────────────────────────────────────────────────
 
+
 def extract_skills(text: str, extra_skills=None) -> set:
     """
     Identify skills from text using keyword matching against the predefined
@@ -155,6 +155,7 @@ def extract_skills(text: str, extra_skills=None) -> set:
 
 
 # ── 4. Semantic Similarity ───────────────────────────────────────────────────
+
 
 def compute_similarity(cv_text: str, jd_text: str) -> float:
     """
@@ -184,6 +185,7 @@ def similarity_method() -> str:
 
 
 # ── 5. Report Generation ─────────────────────────────────────────────────────
+
 
 def generate_report(
     similarity_score: float,
@@ -228,8 +230,9 @@ def generate_report(
 
 # ── Public pipeline ──────────────────────────────────────────────────────────
 
+
 def analyze(
-    cv_source: Union[bytes, str, io.BytesIO],
+    cv_source: bytes | str | io.BytesIO,
     jd_text: str,
 ) -> dict:
     """

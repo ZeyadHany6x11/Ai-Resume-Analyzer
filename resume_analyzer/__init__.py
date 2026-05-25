@@ -25,7 +25,9 @@ def extract_text(source) -> str:
     return _service().extract_text(source)
 
 
-def generate_report(similarity_score: float, cv_skills: set[str], jd_skills: set[str], cv_tokens: list[str]) -> dict:
+def generate_report(
+    similarity_score: float, cv_skills: set[str], jd_skills: set[str], cv_tokens: list[str]
+) -> dict:
     return _service().generate_report(similarity_score, cv_skills, jd_skills, cv_tokens)
 
 
@@ -35,6 +37,7 @@ def preprocess_text(text: str) -> list[str]:
 
 def similarity_method() -> str:
     return _service().similarity_method
+
 
 __all__ = [
     "analyze",

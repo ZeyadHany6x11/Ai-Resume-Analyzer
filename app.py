@@ -7,10 +7,11 @@ instant semantic match score, skill gap analysis, and improvement tips.
 
 import io
 import logging
+
 import streamlit as st
+
 from resume_analyzer.container import get_analysis_service
 from resume_analyzer.utils import ResumeAnalyzerError
-
 
 logger = logging.getLogger(__name__)
 analysis_service = get_analysis_service()
@@ -75,7 +76,7 @@ if analyse_clicked:
             cv_source = io.BytesIO(file_bytes)
         else:
             cv_source = file_bytes.decode("utf-8", errors="replace")
-    
+
     if cv_source is None and cv_text_input.strip():
         cv_source = cv_text_input.strip()
 
@@ -100,16 +101,23 @@ if analyse_clicked:
         preview_cv_skills = analysis_service.extract_skills(preview_text)
         preview_jd_skills = analysis_service.extract_skills(jd_text_input.strip())
 
-        with st.expander(
-            f"🔎 Skills detected before analysis — CV: {len(preview_cv_skills)}  |  JD: {len(preview_jd_skills)}"
-        ):
+        preview_label = (
+            "🔎 Skills detected before analysis — "
+            f"CV: {len(preview_cv_skills)}  |  JD: {len(preview_jd_skills)}"
+        )
+
+        with st.expander(preview_label):
             dc, dj = st.columns(2)
             with dc:
                 st.markdown("**Skills found in your CV:**")
-                st.write(", ".join(sorted(preview_cv_skills)) if preview_cv_skills else "None detected")
+                st.write(
+                    ", ".join(sorted(preview_cv_skills)) if preview_cv_skills else "None detected"
+                )
             with dj:
                 st.markdown("**Skills found in the Job Description:**")
-                st.write(", ".join(sorted(preview_jd_skills)) if preview_jd_skills else "None detected")
+                st.write(
+                    ", ".join(sorted(preview_jd_skills)) if preview_jd_skills else "None detected"
+                )
     except Exception:
         logger.exception("Skill preview failed")
 
@@ -211,6 +219,4 @@ if the underlying concepts match.
 # ── Footer ───────────────────────────────────────────────────────────────────
 
 st.divider()
-st.caption(
-    "Built with Python · PyPDF2 · NLTK · SentenceTransformers · scikit-learn · Streamlit"
-)
+st.caption("Built with Python · PyPDF2 · NLTK · SentenceTransformers · scikit-learn · Streamlit")

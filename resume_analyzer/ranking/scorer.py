@@ -43,18 +43,21 @@ class RankingService:
                 "Add relevant personal or open-source projects that showcase the missing skills."
             )
             suggestions.append(
-                "Consider online courses (Coursera, Udemy, edX, freeCodeCamp) or certifications for skill gaps."
+                "Consider online courses (Coursera, Udemy, edX, freeCodeCamp) "
+                "or certifications for skill gaps."
             )
 
         if match_score < 60:
             suggestions.append(
-                "Tailor your CV summary/objective to mirror the exact language and keywords in the job description."
+                "Tailor your CV summary/objective to mirror the exact language "
+                "and keywords in the job description."
             )
 
         project_keywords = ["project", "projects", "built", "developed", "created", "implemented"]
         if not any(keyword in cv_tokens for keyword in project_keywords):
             suggestions.append(
-                "Add a dedicated **Projects** section with brief descriptions and technologies used."
+                "Add a dedicated **Projects** section with brief descriptions "
+                "and technologies used."
             )
 
         certification_keywords = ["certificate", "certification", "certified", "credential"]
@@ -65,12 +68,14 @@ class RankingService:
 
         if len(extra_skills) > 10:
             suggestions.append(
-                "You have many skills — make sure the most job-relevant ones are prominently placed near the top of your CV."
+                "You have many skills — make sure the most job-relevant ones "
+                "are prominently placed near the top of your CV."
             )
 
         if not suggestions:
             suggestions.append(
-                "Great fit! Ensure your CV is concise, well-formatted, ATS-friendly, and free of typos."
+                "Great fit! Ensure your CV is concise, well-formatted, "
+                "ATS-friendly, and free of typos."
             )
 
         return {

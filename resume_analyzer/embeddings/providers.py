@@ -10,11 +10,9 @@ class SimilarityProvider(Protocol):
     """Compute similarity between two normalized text documents."""
 
     @property
-    def method(self) -> str:
-        ...
+    def method(self) -> str: ...
 
-    def compute(self, cv_text: str, jd_text: str) -> float:
-        ...
+    def compute(self, cv_text: str, jd_text: str) -> float: ...
 
 
 class TfidfSimilarityProvider:

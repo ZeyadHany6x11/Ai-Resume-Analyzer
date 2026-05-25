@@ -5,8 +5,7 @@ from typing import Protocol
 
 
 class BackgroundRunner(Protocol):
-    def add_task(self, func: Callable, *args, **kwargs) -> None:
-        ...
+    def add_task(self, func: Callable, *args, **kwargs) -> None: ...
 
 
 class InlineBackgroundRunner:

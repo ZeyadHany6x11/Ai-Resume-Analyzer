@@ -12,7 +12,6 @@ from resume_analyzer.services.analysis import ResumeAnalysisService
 from resume_analyzer.services.background import BackgroundRunner
 from resume_analyzer.utils import JobProcessingError, ResumeAnalyzerError
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -80,9 +79,12 @@ class AnalysisJobService:
             self._result_repository.save(job_id, result)
             self._job_repository.update_status(job_id, "completed")
         except ResumeAnalyzerError as exc:
-            logger.exception("Analysis job failed with expected application error", extra={"job_id": job_id})
+            logger.exception(
+                "Analysis job failed with expected application error",
+                extra={"job_id": job_id},
+            )
             self._job_repository.update_status(job_id, "failed", exc.safe_message)
-        except Exception as exc:
+        except Exception:
             logger.exception("Analysis job failed unexpectedly", extra={"job_id": job_id})
             self._job_repository.update_status(job_id, "failed", JobProcessingError.safe_message)
 

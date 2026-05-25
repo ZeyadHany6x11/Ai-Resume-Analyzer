@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import io
-from typing import Union
 
 import PyPDF2
 
 from resume_analyzer.utils import DocumentParsingError, UnsupportedDocumentError
 
-
-DocumentSource = Union[bytes, str, io.BytesIO]
+DocumentSource = bytes | str | io.BytesIO
 
 
 class DocumentParser:
