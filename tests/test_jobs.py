@@ -155,3 +155,18 @@ def test_job_service_cleans_up_stale_jobs(tmp_path):
     assert status is not None
     assert status.status == "failed"
     assert status.error_message == "Analysis job expired before completion."
+
+
+def test_inline_runner_processes_multiple_jobs_without_state_leakage(tmp_path):
+    service = build_job_service(tmp_path, SuccessfulAnalysisService())
+    jobs = [service.create_text_job(f"Python resume {index}", "Python job") for index in range(5)]
+
+    for job in jobs:
+        service.enqueue(job.id, InlineBackgroundRunner())
+
+    statuses = [service.get_status(job.id) for job in jobs]
+    results = [service.get_result(job.id) for job in jobs]
+
+    assert len({job.id for job in jobs}) == 5
+    assert all(status is not None and status.status == "completed" for status in statuses)
+    assert all(result is not None and result["match_score"] == 91 for result in results)

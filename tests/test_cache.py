@@ -44,3 +44,16 @@ def test_cached_similarity_provider_reuses_stable_key():
     assert cached.compute("python sql", "python") == 0.9
 
     assert provider.calls == 1
+
+
+def test_cached_similarity_provider_recomputes_after_expiration():
+    clock = MutableClock()
+    provider = CountingProvider()
+    cache = InMemoryTTLCache(default_ttl_seconds=5, clock=clock)
+    cached = CachedSimilarityProvider(provider, cache, ttl_seconds=5)
+
+    cached.compute("python sql", "python")
+    clock.now = 6
+    cached.compute("python sql", "python")
+
+    assert provider.calls == 2

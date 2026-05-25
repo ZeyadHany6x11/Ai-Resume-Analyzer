@@ -17,3 +17,8 @@ def test_document_parser_rejects_unsupported_source_type():
 def test_document_parser_wraps_invalid_pdf_errors():
     with pytest.raises(ValueError, match="Failed to read PDF"):
         DocumentParser().extract_text(io.BytesIO(b"not a pdf"))
+
+
+def test_document_parser_rejects_truncated_pdf_bytes():
+    with pytest.raises(ValueError, match="Failed to read PDF"):
+        DocumentParser().extract_text(b"%PDF-1.4\ntruncated")

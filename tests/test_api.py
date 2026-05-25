@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
+import resume_analyzer.api.main as api_main
 from resume_analyzer.api.main import app, get_job_service_dependency
+from resume_analyzer.config import Settings
 from resume_analyzer.repositories import SQLiteAnalysisJobRepository, SQLiteAnalysisResultRepository
 from resume_analyzer.services import AnalysisJobService
 
@@ -122,3 +124,34 @@ def test_file_upload_rejects_empty_pdf(tmp_path):
 
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "Resume and job description inputs are required."
+
+
+def test_file_upload_rejects_oversized_pdf(tmp_path, monkeypatch):
+    client = build_test_client(tmp_path)
+    monkeypatch.setattr(
+        api_main,
+        "get_settings",
+        lambda: Settings(max_upload_size_mb=0),
+    )
+
+    response = client.post(
+        "/api/v1/analyses/file",
+        data={"job_description": "Python job"},
+        files={"file": ("resume.pdf", b"%PDF-too-large", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "AnalysisValidationError"
+
+
+def test_file_upload_accepts_pdf_shape(tmp_path):
+    client = build_test_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/analyses/file",
+        data={"job_description": "Python job"},
+        files={"file": ("resume.pdf", b"%PDF-sample", "application/pdf")},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"

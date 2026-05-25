@@ -30,3 +30,16 @@ def test_ranking_service_returns_positive_message_for_strong_fit():
     assert report["suggestions"] == [
         "Great fit! Ensure your CV is concise, well-formatted, ATS-friendly, and free of typos."
     ]
+
+
+def test_ranking_service_regression_for_semantic_and_skill_weights():
+    report = RankingService(semantic_weight=0.6, skill_weight=0.4).generate_report(
+        similarity_score=0.8,
+        cv_skills={"python", "sql", "docker"},
+        jd_skills={"python", "sql", "aws", "docker"},
+        cv_tokens=["built", "certified"],
+    )
+
+    assert report["match_score"] == 78
+    assert report["similarity_score"] == 80
+    assert report["skill_overlap"] == 75
