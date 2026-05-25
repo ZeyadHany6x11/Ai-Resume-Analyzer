@@ -9,8 +9,24 @@ def test_legacy_public_imports_remain_available():
 
 
 def test_smoke_text_analysis_returns_existing_report_shape():
-    resume_analyzer._legacy.compute_similarity = lambda _cv, _jd: 0.75
-    resume_analyzer._legacy.similarity_method = lambda: "test similarity"
+    class FakeService:
+        def analyze(self, cv_source, jd_text):
+            return {
+                "match_score": 75,
+                "similarity_score": 75.0,
+                "skill_overlap": 50.0,
+                "matched_skills": ["python"],
+                "missing_skills": ["aws"],
+                "extra_skills": ["sql"],
+                "suggestions": ["test"],
+                "strength": "Good",
+                "cv_text": cv_source,
+                "jd_text": jd_text,
+                "method": "test similarity",
+            }
+
+    resume_analyzer.get_analysis_service.cache_clear()
+    resume_analyzer.get_analysis_service = lambda: FakeService()
 
     report = analyze(
         "Python developer with Django, machine learning, SQL, and Docker experience.",

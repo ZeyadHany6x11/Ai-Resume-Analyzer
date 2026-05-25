@@ -7,7 +7,10 @@ instant semantic match score, skill gap analysis, and improvement tips.
 
 import io
 import streamlit as st
-from resume_analyzer import analyze, extract_text, extract_skills
+from resume_analyzer.container import get_analysis_service
+
+
+analysis_service = get_analysis_service()
 
 # ── Page configuration ───────────────────────────────────────────────────────
 
@@ -86,13 +89,13 @@ if analyse_clicked:
     try:
         if isinstance(cv_source, io.BytesIO):
             cv_source.seek(0)
-            preview_text = extract_text(io.BytesIO(cv_source.read()))
+            preview_text = analysis_service.extract_text(io.BytesIO(cv_source.read()))
             cv_source.seek(0)
         else:
-            preview_text = extract_text(cv_source)
+            preview_text = analysis_service.extract_text(cv_source)
 
-        preview_cv_skills = extract_skills(preview_text)
-        preview_jd_skills = extract_skills(jd_text_input.strip())
+        preview_cv_skills = analysis_service.extract_skills(preview_text)
+        preview_jd_skills = analysis_service.extract_skills(jd_text_input.strip())
 
         with st.expander(
             f"🔎 Skills detected before analysis — CV: {len(preview_cv_skills)}  |  JD: {len(preview_jd_skills)}"
@@ -114,7 +117,7 @@ if analyse_clicked:
     # Run analysis
     with st.spinner("Analysing your CV… (first run may take ~30 s to load the AI model)"):
         try:
-            report = analyze(cv_source, jd_text_input.strip())
+            report = analysis_service.analyze(cv_source, jd_text_input.strip())
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
             st.stop()

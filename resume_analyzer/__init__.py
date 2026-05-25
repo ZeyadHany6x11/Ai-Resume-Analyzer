@@ -1,37 +1,40 @@
-"""Compatibility entrypoint for the resume analyzer package.
-
-The project is being migrated from a flat module to a package-based
-architecture. During the transition, re-export the legacy public functions so
-existing imports such as ``from resume_analyzer import analyze`` keep working.
-"""
+"""Public compatibility entrypoint for the resume analyzer package."""
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-from types import ModuleType
+from resume_analyzer.container import get_analysis_service
 
 
-def _load_legacy_module() -> ModuleType:
-    legacy_path = Path(__file__).resolve().parent.parent / "resume_analyzer.py"
-    spec = importlib.util.spec_from_file_location("_legacy_resume_analyzer", legacy_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load legacy analyzer module from {legacy_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _service():
+    return get_analysis_service()
 
 
-_legacy = _load_legacy_module()
+def analyze(cv_source, jd_text):
+    return _service().analyze(cv_source, jd_text)
 
-analyze = _legacy.analyze
-compute_similarity = _legacy.compute_similarity
-extract_skills = _legacy.extract_skills
-extract_text = _legacy.extract_text
-generate_report = _legacy.generate_report
-preprocess_text = _legacy.preprocess_text
-similarity_method = _legacy.similarity_method
+
+def compute_similarity(cv_text: str, jd_text: str) -> float:
+    return _service().compute_similarity(cv_text, jd_text)
+
+
+def extract_skills(text: str, extra_skills=None) -> set[str]:
+    return _service().extract_skills(text, extra_skills)
+
+
+def extract_text(source) -> str:
+    return _service().extract_text(source)
+
+
+def generate_report(similarity_score: float, cv_skills: set[str], jd_skills: set[str], cv_tokens: list[str]) -> dict:
+    return _service().generate_report(similarity_score, cv_skills, jd_skills, cv_tokens)
+
+
+def preprocess_text(text: str) -> list[str]:
+    return _service().preprocess_text(text)
+
+
+def similarity_method() -> str:
+    return _service().similarity_method
 
 __all__ = [
     "analyze",
