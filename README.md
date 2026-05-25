@@ -1,21 +1,45 @@
 # AI Resume Analyzer & Job Matcher
 
-Analyse a CV against a job description using NLP and semantic similarity.
-Get a match score, skill gap report, and improvement suggestions.
+Production-style resume analysis service for comparing a CV against a job
+description using skill extraction, NLP preprocessing, semantic similarity, and
+weighted ranking.
 
-## What changed in this version
+The project keeps the original Streamlit experience while adding a clean service
+architecture and a FastAPI backend suitable for SaaS-style evolution.
 
-- `app.py` — added a skill preview panel (shows skills detected in CV and JD before the full analysis) and fixed a PDF byte-stream bug that caused very low match scores.
-- PDFs now extract reliably with PyPDF2.
+## Features
 
----
+- Streamlit UI for uploading a PDF or pasting resume text
+- FastAPI backend with asynchronous background analysis jobs
+- PDF/text parsing layer
+- Skill extraction service backed by the existing skills catalog
+- SentenceTransformers semantic similarity with TF-IDF fallback
+- Weighted ranking and improvement suggestions
+- SQLite repositories for job and result persistence
+- In-memory TTL cache for expensive similarity operations
+- Environment-based configuration
+- Structured logging and typed application errors
+- Deterministic pytest suite with fake providers for expensive dependencies
+
+## Architecture
+
+```text
+resume_analyzer/
+├── api/             # FastAPI routes and request/response schemas
+├── cache/           # Cache interfaces and in-memory TTL adapter
+├── database/        # SQLite connection and schema bootstrap
+├── embeddings/      # Similarity providers and cache wrapper
+├── parsers/         # PDF/text document parsing
+├── ranking/         # Match scoring and report generation
+├── repositories/    # Persistence boundaries for jobs/results
+├── services/        # Business workflows and background job orchestration
+└── utils/           # Logging and typed exceptions
+```
+
+`app.py` is intentionally thin: it handles Streamlit UI concerns and delegates
+analysis work to the service layer.
 
 ## Local Setup
-
-### Prerequisites
-- Python 3.10 or newer
-
-### 1. Create a virtual environment
 
 ```bash
 python -m venv venv
@@ -25,67 +49,91 @@ venv\Scripts\activate
 
 # macOS / Linux
 source venv/bin/activate
-```
 
-### 2. Install dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-For a lighter install (CPU-only PyTorch, smaller download):
+For a lighter CPU-only PyTorch install:
+
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-### 3. Run the app
+## Run Streamlit
 
 ```bash
 streamlit run app.py
 ```
 
-Open your browser at **http://localhost:8501**
+Open `http://localhost:8501`.
 
----
+## Run FastAPI
 
-## Files
-
-```
-resume-analyzer/
-├── app.py                  # Streamlit UI
-├── resume_analyzer.py      # Core analysis functions
-├── skills_list.py          # 200+ skills database
-├── requirements.txt        # Python dependencies
-├── README.md
-└── .streamlit/
-    └── config.toml         # Streamlit server config (port 8501)
+```bash
+uvicorn resume_analyzer.api.main:app --reload
 ```
 
----
+Open `http://127.0.0.1:8000/docs` for interactive API docs.
 
-## Core Functions
+### API Flow
 
-| Function | Description |
-|---|---|
-| `extract_text(source)` | Read text from PDF bytes or plain string |
-| `preprocess_text(text)` | Lowercase, remove punctuation, tokenise, remove stopwords, lemmatise |
-| `extract_skills(text)` | Match against 200+ skills using keyword + regex |
-| `compute_similarity(cv, jd)` | SentenceTransformers embeddings + cosine similarity (TF-IDF fallback) |
-| `generate_report(...)` | Blended match score, skill breakdown, improvement tips |
-| `analyze(cv_source, jd_text)` | Full end-to-end pipeline |
+- `GET /health`
+- `POST /analyses/text`
+- `POST /analyses/file`
+- `GET /analyses/{analysis_id}/status`
+- `GET /analyses/{analysis_id}`
 
-## Match Score Formula
+Submission endpoints create a queued job, schedule background processing, and
+return:
 
+```json
+{
+  "analysis_id": "uuid",
+  "status": "queued"
+}
 ```
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust values as needed.
+
+| Variable | Default | Description |
+|---|---:|---|
+| `RESUME_ANALYZER_APP_NAME` | `AI Resume Analyzer` | Application display name |
+| `RESUME_ANALYZER_ENVIRONMENT` | `local` | Runtime environment |
+| `RESUME_ANALYZER_LOG_LEVEL` | `INFO` | Python logging level |
+| `RESUME_ANALYZER_DATABASE_PATH` | `resume_analyzer.db` | SQLite database path |
+| `RESUME_ANALYZER_EMBEDDING_MODEL_NAME` | `all-MiniLM-L6-v2` | SentenceTransformer model |
+| `RESUME_ANALYZER_CACHE_ENABLED` | `true` | Enable similarity cache |
+| `RESUME_ANALYZER_CACHE_TTL_SECONDS` | `3600` | Cache TTL |
+| `RESUME_ANALYZER_SEMANTIC_WEIGHT` | `0.6` | Semantic score weight |
+| `RESUME_ANALYZER_SKILL_WEIGHT` | `0.4` | Skill overlap weight |
+| `RESUME_ANALYZER_MAX_UPLOAD_SIZE_MB` | `10` | Intended upload size limit |
+
+SQLite tables are created automatically when repository-backed workflows run.
+
+## Testing
+
+```bash
+pytest
+python -m compileall .
+```
+
+Tests use deterministic fakes for model-heavy behavior and an inline background
+runner for reproducible job processing.
+
+## Scoring
+
+```text
 Match Score = (0.6 x Semantic Similarity) + (0.4 x Skill Overlap Ratio)
 ```
 
----
+The default weights can be adjusted through environment variables.
 
-## Sample Job Description for Testing
+## Sample Job Description
 
-```
+```text
 We are looking for a Senior Python Developer / Machine Learning Engineer.
 Requirements:
 - 5+ years of Python development experience
@@ -94,13 +142,5 @@ Requirements:
 - NLP or computer vision project experience is a strong plus
 - Proficiency with PostgreSQL and Redis
 - Experience with Docker, Kubernetes, and CI/CD pipelines
-- Cloud experience on AWS or GCP (S3, EC2, Lambda, SageMaker)
-- Familiarity with Apache Kafka or message queue systems
-- Experience with Agile/Scrum workflows
-- Strong knowledge of system design and microservices architecture
-- Git-based collaboration and code review practices
+- Cloud experience on AWS or GCP
 ```
-
-Expected results with the two sample CVs:
-- **Sarah Chen (Senior)** — ~80-90% match, 0 missing skills
-- **Michael Torres (Junior)** — ~30-45% match, 15-19 missing skills
