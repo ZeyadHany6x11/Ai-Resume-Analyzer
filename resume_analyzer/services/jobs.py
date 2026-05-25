@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import io
+import logging
+
+from resume_analyzer.repositories import (
+    AnalysisJobRecord,
+    AnalysisJobRepository,
+    AnalysisResultRepository,
+)
+from resume_analyzer.services.analysis import ResumeAnalysisService
+from resume_analyzer.services.background import BackgroundRunner
+from resume_analyzer.utils import JobProcessingError, ResumeAnalyzerError
+
+
+logger = logging.getLogger(__name__)
+
+
+class AnalysisJobService:
+    """Manage persisted analysis jobs and background processing."""
+
+    def __init__(
+        self,
+        job_repository: AnalysisJobRepository,
+        result_repository: AnalysisResultRepository,
+        analysis_service: ResumeAnalysisService,
+    ) -> None:
+        self._job_repository = job_repository
+        self._result_repository = result_repository
+        self._analysis_service = analysis_service
+
+    def create_text_job(self, cv_text: str, job_description: str) -> AnalysisJobRecord:
+        job = AnalysisJobRecord(
+            id="",
+            status="queued",
+            input_type="text",
+            cv_text=cv_text,
+            job_description=job_description,
+        )
+        job_id = self._job_repository.create(job)
+        created = self._job_repository.get(job_id)
+        if created is None:
+            raise JobProcessingError(f"Created job {job_id} could not be loaded.")
+        return created
+
+    def create_file_job(self, cv_file: bytes, job_description: str) -> AnalysisJobRecord:
+        job = AnalysisJobRecord(
+            id="",
+            status="queued",
+            input_type="file",
+            cv_file=cv_file,
+            job_description=job_description,
+        )
+        job_id = self._job_repository.create(job)
+        created = self._job_repository.get(job_id)
+        if created is None:
+            raise JobProcessingError(f"Created job {job_id} could not be loaded.")
+        return created
+
+    def enqueue(self, job_id: str, runner: BackgroundRunner) -> None:
+        runner.add_task(self.run_analysis_job, job_id)
+
+    def get_status(self, job_id: str) -> AnalysisJobRecord | None:
+        return self._job_repository.get(job_id)
+
+    def get_result(self, job_id: str) -> dict | None:
+        result = self._result_repository.get_by_job_id(job_id)
+        return result.result if result else None
+
+    def run_analysis_job(self, job_id: str) -> None:
+        job = self._job_repository.get(job_id)
+        if job is None:
+            raise JobProcessingError(f"Analysis job {job_id} was not found.")
+
+        self._job_repository.update_status(job_id, "processing")
+
+        try:
+            cv_source = self._resolve_cv_source(job)
+            result = self._analysis_service.analyze(cv_source, job.job_description)
+            self._result_repository.save(job_id, result)
+            self._job_repository.update_status(job_id, "completed")
+        except ResumeAnalyzerError as exc:
+            logger.exception("Analysis job failed with expected application error", extra={"job_id": job_id})
+            self._job_repository.update_status(job_id, "failed", exc.safe_message)
+        except Exception as exc:
+            logger.exception("Analysis job failed unexpectedly", extra={"job_id": job_id})
+            self._job_repository.update_status(job_id, "failed", JobProcessingError.safe_message)
+
+    def _resolve_cv_source(self, job: AnalysisJobRecord):
+        if job.input_type == "text" and job.cv_text is not None:
+            return job.cv_text
+        if job.input_type == "file" and job.cv_file is not None:
+            return io.BytesIO(job.cv_file)
+        raise JobProcessingError(f"Analysis job {job.id} has invalid input data.")
