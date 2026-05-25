@@ -4,9 +4,9 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Literal, Protocol
 
-from resume_analyzer.database import connect, initialize_database
+from resume_analyzer.database import connection_scope, initialize_database, transaction
 from resume_analyzer.utils import PersistenceError
 
 
@@ -14,10 +14,13 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+JobStatus = Literal["queued", "processing", "completed", "failed"]
+
+
 @dataclass(frozen=True)
 class AnalysisJobRecord:
     id: str
-    status: str
+    status: JobStatus | str
     input_type: str
     job_description: str
     cv_text: str | None = None
@@ -41,15 +44,30 @@ class AnalysisJobRepository(Protocol):
 
     def get(self, job_id: str) -> AnalysisJobRecord | None: ...
 
+    def list(
+        self,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AnalysisJobRecord]: ...
+
     def find_stale(
         self, statuses: list[str], older_than: str, limit: int = 100
     ) -> list[AnalysisJobRecord]: ...
+
+    def cleanup(
+        self,
+        older_than: str,
+        statuses: list[str] | None = None,
+    ) -> int: ...
 
 
 class AnalysisResultRepository(Protocol):
     def save(self, job_id: str, result: dict) -> None: ...
 
     def get_by_job_id(self, job_id: str) -> AnalysisResultRecord | None: ...
+
+    def cleanup(self, older_than: str) -> int: ...
 
 
 class SQLiteAnalysisJobRepository:
@@ -61,7 +79,7 @@ class SQLiteAnalysisJobRepository:
         job_id = job.id or str(uuid.uuid4())
         now = utc_now_iso()
         try:
-            with connect(self._database_path) as connection:
+            with transaction(self._database_path) as connection:
                 connection.execute(
                     """
                     INSERT INTO analysis_jobs (
@@ -88,7 +106,7 @@ class SQLiteAnalysisJobRepository:
 
     def update_status(self, job_id: str, status: str, error_message: str | None = None) -> None:
         try:
-            with connect(self._database_path) as connection:
+            with transaction(self._database_path) as connection:
                 connection.execute(
                     """
                     UPDATE analysis_jobs
@@ -102,7 +120,7 @@ class SQLiteAnalysisJobRepository:
 
     def get(self, job_id: str) -> AnalysisJobRecord | None:
         try:
-            with connect(self._database_path) as connection:
+            with connection_scope(self._database_path) as connection:
                 row = connection.execute(
                     "SELECT * FROM analysis_jobs WHERE id = ?",
                     (job_id,),
@@ -125,6 +143,28 @@ class SQLiteAnalysisJobRepository:
             updated_at=row["updated_at"],
         )
 
+    def list(
+        self,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AnalysisJobRecord]:
+        query = "SELECT * FROM analysis_jobs"
+        params: list[str | int] = []
+        if status is not None:
+            query += " WHERE status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        try:
+            with connection_scope(self._database_path) as connection:
+                rows = connection.execute(query, params).fetchall()
+        except Exception as exc:
+            raise PersistenceError(f"Failed to list analysis jobs: {exc}") from exc
+
+        return [self._row_to_job(row) for row in rows]
+
     def find_stale(
         self, statuses: list[str], older_than: str, limit: int = 100
     ) -> list[AnalysisJobRecord]:
@@ -132,7 +172,7 @@ class SQLiteAnalysisJobRepository:
             return []
         placeholders = ",".join("?" for _ in statuses)
         try:
-            with connect(self._database_path) as connection:
+            with connection_scope(self._database_path) as connection:
                 rows = connection.execute(
                     f"""
                     SELECT * FROM analysis_jobs
@@ -145,20 +185,46 @@ class SQLiteAnalysisJobRepository:
         except Exception as exc:
             raise PersistenceError(f"Failed to load stale analysis jobs: {exc}") from exc
 
-        return [
-            AnalysisJobRecord(
-                id=row["id"],
-                status=row["status"],
-                input_type=row["input_type"],
-                cv_text=row["cv_text"],
-                cv_file=row["cv_file"],
-                job_description=row["job_description"],
-                error_message=row["error_message"],
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
-            for row in rows
-        ]
+        return [self._row_to_job(row) for row in rows]
+
+    def cleanup(self, older_than: str, statuses: list[str] | None = None) -> int:
+        status_filter = statuses or ["completed", "failed"]
+        placeholders = ",".join("?" for _ in status_filter)
+        try:
+            with transaction(self._database_path) as connection:
+                connection.execute(
+                    f"""
+                    DELETE FROM analysis_results
+                    WHERE job_id IN (
+                        SELECT id FROM analysis_jobs
+                        WHERE status IN ({placeholders}) AND updated_at < ?
+                    )
+                    """,
+                    (*status_filter, older_than),
+                )
+                cursor = connection.execute(
+                    f"""
+                    DELETE FROM analysis_jobs
+                    WHERE status IN ({placeholders}) AND updated_at < ?
+                    """,
+                    (*status_filter, older_than),
+                )
+                return cursor.rowcount
+        except Exception as exc:
+            raise PersistenceError(f"Failed to clean up analysis jobs: {exc}") from exc
+
+    def _row_to_job(self, row) -> AnalysisJobRecord:
+        return AnalysisJobRecord(
+            id=row["id"],
+            status=row["status"],
+            input_type=row["input_type"],
+            cv_text=row["cv_text"],
+            cv_file=row["cv_file"],
+            job_description=row["job_description"],
+            error_message=row["error_message"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
 
 class SQLiteAnalysisResultRepository:
@@ -168,7 +234,7 @@ class SQLiteAnalysisResultRepository:
 
     def save(self, job_id: str, result: dict) -> None:
         try:
-            with connect(self._database_path) as connection:
+            with transaction(self._database_path) as connection:
                 connection.execute(
                     """
                     INSERT OR REPLACE INTO analysis_results (job_id, result_json, created_at)
@@ -181,7 +247,7 @@ class SQLiteAnalysisResultRepository:
 
     def get_by_job_id(self, job_id: str) -> AnalysisResultRecord | None:
         try:
-            with connect(self._database_path) as connection:
+            with connection_scope(self._database_path) as connection:
                 row = connection.execute(
                     "SELECT * FROM analysis_results WHERE job_id = ?",
                     (job_id,),
@@ -197,3 +263,14 @@ class SQLiteAnalysisResultRepository:
             result=json.loads(row["result_json"]),
             created_at=row["created_at"],
         )
+
+    def cleanup(self, older_than: str) -> int:
+        try:
+            with transaction(self._database_path) as connection:
+                cursor = connection.execute(
+                    "DELETE FROM analysis_results WHERE created_at < ?",
+                    (older_than,),
+                )
+                return cursor.rowcount
+        except Exception as exc:
+            raise PersistenceError(f"Failed to clean up analysis results: {exc}") from exc

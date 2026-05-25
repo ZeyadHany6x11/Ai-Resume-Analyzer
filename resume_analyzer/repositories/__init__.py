@@ -5,6 +5,7 @@ from resume_analyzer.repositories.analysis import (
     AnalysisJobRepository,
     AnalysisResultRecord,
     AnalysisResultRepository,
+    JobStatus,
     SQLiteAnalysisJobRepository,
     SQLiteAnalysisResultRepository,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "AnalysisJobRepository",
     "AnalysisResultRecord",
     "AnalysisResultRepository",
+    "JobStatus",
     "SQLiteAnalysisJobRepository",
     "SQLiteAnalysisResultRepository",
 ]
