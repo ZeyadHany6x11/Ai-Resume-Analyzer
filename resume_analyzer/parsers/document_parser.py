@@ -5,6 +5,8 @@ from typing import Union
 
 import PyPDF2
 
+from resume_analyzer.utils import DocumentParsingError, UnsupportedDocumentError
+
 
 DocumentSource = Union[bytes, str, io.BytesIO]
 
@@ -23,6 +25,6 @@ class DocumentParser:
                 pages = [page.extract_text() or "" for page in reader.pages]
                 return "\n".join(pages)
             except Exception as exc:
-                raise ValueError(f"Failed to read PDF: {exc}") from exc
+                raise DocumentParsingError(f"Failed to read PDF: {exc}") from exc
 
-        raise TypeError(f"Unsupported source type: {type(source)}")
+        raise UnsupportedDocumentError(f"Unsupported source type: {type(source)}")

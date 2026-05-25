@@ -5,6 +5,7 @@ from resume_analyzer.parsers import DocumentParser, DocumentSource
 from resume_analyzer.ranking import RankingService
 from resume_analyzer.services.skill_extraction import SkillExtractionService
 from resume_analyzer.services.text_preprocessing import TextPreprocessingService
+from resume_analyzer.utils import AnalysisValidationError
 
 
 class ResumeAnalysisService:
@@ -56,6 +57,11 @@ class ResumeAnalysisService:
 
     def analyze(self, cv_source: DocumentSource, jd_text: str) -> dict:
         cv_text = self.extract_text(cv_source)
+        if not cv_text.strip():
+            raise AnalysisValidationError("CV text is required.")
+        if not jd_text.strip():
+            raise AnalysisValidationError("Job description text is required.")
+
         cv_tokens = self.preprocess_text(cv_text)
         jd_tokens = self.preprocess_text(jd_text)
 

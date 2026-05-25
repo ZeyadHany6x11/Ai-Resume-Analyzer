@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from resume_analyzer.config import get_settings
 from resume_analyzer.embeddings import HybridSimilarityProvider
 from resume_analyzer.parsers import DocumentParser
 from resume_analyzer.ranking import RankingService
@@ -10,15 +11,22 @@ from resume_analyzer.services import (
     SkillExtractionService,
     TextPreprocessingService,
 )
+from resume_analyzer.utils import configure_logging
 
 
 def build_analysis_service() -> ResumeAnalysisService:
+    settings = get_settings()
+    configure_logging(settings)
+
     return ResumeAnalysisService(
         parser=DocumentParser(),
         preprocessor=TextPreprocessingService(),
         skill_extractor=SkillExtractionService(),
-        similarity_provider=HybridSimilarityProvider(),
-        ranking_service=RankingService(),
+        similarity_provider=HybridSimilarityProvider(model_name=settings.embedding_model_name),
+        ranking_service=RankingService(
+            semantic_weight=settings.semantic_weight,
+            skill_weight=settings.skill_weight,
+        ),
     )
 
 

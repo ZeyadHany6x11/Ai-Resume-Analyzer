@@ -6,10 +6,13 @@ instant semantic match score, skill gap analysis, and improvement tips.
 """
 
 import io
+import logging
 import streamlit as st
 from resume_analyzer.container import get_analysis_service
+from resume_analyzer.utils import ResumeAnalyzerError
 
 
+logger = logging.getLogger(__name__)
 analysis_service = get_analysis_service()
 
 # ── Page configuration ───────────────────────────────────────────────────────
@@ -108,7 +111,7 @@ if analyse_clicked:
                 st.markdown("**Skills found in the Job Description:**")
                 st.write(", ".join(sorted(preview_jd_skills)) if preview_jd_skills else "None detected")
     except Exception:
-        pass  # Non-critical; don't block the analysis
+        logger.exception("Skill preview failed")
 
     # Reset BytesIO position before passing to analyze()
     if isinstance(cv_source, io.BytesIO):
@@ -118,7 +121,11 @@ if analyse_clicked:
     with st.spinner("Analysing your CV… (first run may take ~30 s to load the AI model)"):
         try:
             report = analysis_service.analyze(cv_source, jd_text_input.strip())
+        except ResumeAnalyzerError as exc:
+            st.error(exc.safe_message)
+            st.stop()
         except Exception as exc:
+            logger.exception("Analysis failed")
             st.error(f"Analysis failed: {exc}")
             st.stop()
 
