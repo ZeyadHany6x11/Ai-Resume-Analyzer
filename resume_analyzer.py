@@ -25,6 +25,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 import PyPDF2
 
+from resume_analyzer.parsers import DocumentParser
+from resume_analyzer.services import SkillExtractionService
 from skills_list import SKILLS_DATABASE
 
 
@@ -82,19 +84,7 @@ def extract_text(source: Union[bytes, str, io.BytesIO]) -> str:
     str
         Extracted text.
     """
-    if isinstance(source, str):
-        return source
-
-    if isinstance(source, (bytes, io.BytesIO)):
-        stream = io.BytesIO(source) if isinstance(source, bytes) else source
-        try:
-            reader = PyPDF2.PdfReader(stream)
-            pages = [page.extract_text() or "" for page in reader.pages]
-            return "\n".join(pages)
-        except Exception as exc:
-            raise ValueError(f"Failed to read PDF: {exc}") from exc
-
-    raise TypeError(f"Unsupported source type: {type(source)}")
+    return DocumentParser().extract_text(source)
 
 
 # ── 2. Text Preprocessing ────────────────────────────────────────────────────
@@ -158,35 +148,7 @@ def extract_skills(text: str, extra_skills=None) -> set:
     set[str]
         Normalised set of detected skill names.
     """
-    text_lower = text.lower()
-    skill_pool = SKILLS_DATABASE[:]
-    if extra_skills:
-        skill_pool += [s.lower() for s in extra_skills]
-
-    found: set = set()
-
-    for skill in skill_pool:
-        skill_lower = skill.lower()
-        if " " not in skill_lower:
-            # Whole-word match for single-word skills
-            pattern = r"\b" + re.escape(skill_lower) + r"\b"
-            if re.search(pattern, text_lower):
-                found.add(skill_lower)
-        else:
-            # Substring match for multi-word skills
-            if skill_lower in text_lower:
-                found.add(skill_lower)
-
-    # Regex bonus: catch "X years of Python" patterns
-    pattern_years = re.compile(
-        r"\d+\+?\s+years?\s+(?:of\s+)?([a-z][a-z0-9+#.\-/]+)", re.IGNORECASE
-    )
-    for match in pattern_years.finditer(text_lower):
-        candidate = match.group(1).strip().lower()
-        if candidate in SKILLS_DATABASE:
-            found.add(candidate)
-
-    return found
+    return SkillExtractionService(SKILLS_DATABASE).extract(text, extra_skills)
 
 
 # ── 4. Semantic Similarity ───────────────────────────────────────────────────

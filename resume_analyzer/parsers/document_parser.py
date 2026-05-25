@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+import io
+from typing import Union
+
+import PyPDF2
+
+
+DocumentSource = Union[bytes, str, io.BytesIO]
+
+
+class DocumentParser:
+    """Extract text from supported resume document sources."""
+
+    def extract_text(self, source: DocumentSource) -> str:
+        if isinstance(source, str):
+            return source
+
+        if isinstance(source, (bytes, io.BytesIO)):
+            stream = io.BytesIO(source) if isinstance(source, bytes) else source
+            try:
+                reader = PyPDF2.PdfReader(stream)
+                pages = [page.extract_text() or "" for page in reader.pages]
+                return "\n".join(pages)
+            except Exception as exc:
+                raise ValueError(f"Failed to read PDF: {exc}") from exc
+
+        raise TypeError(f"Unsupported source type: {type(source)}")
