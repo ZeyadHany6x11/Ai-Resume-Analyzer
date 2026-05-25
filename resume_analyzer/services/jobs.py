@@ -87,7 +87,12 @@ class AnalysisJobService:
             self._job_repository.update_status(job_id, "processing")
             logger.info(
                 "Analysis job started",
-                extra={"job_id": job_id, "attempt": attempt, "category": "job_lifecycle"},
+                extra={
+                    "job_id": job_id,
+                    "job_correlation_id": job_id,
+                    "attempt": attempt,
+                    "category": "job_lifecycle",
+                },
             )
 
             started_at = self._clock()
@@ -102,20 +107,35 @@ class AnalysisJobService:
                 self._job_repository.update_status(job_id, "completed")
                 logger.info(
                     "Analysis job completed",
-                    extra={"job_id": job_id, "attempt": attempt, "category": "job_lifecycle"},
+                    extra={
+                        "job_id": job_id,
+                        "job_correlation_id": job_id,
+                        "attempt": attempt,
+                        "category": "job_lifecycle",
+                    },
                 )
                 return
             except asyncio.CancelledError:
                 logger.warning(
                     "Analysis job cancelled",
-                    extra={"job_id": job_id, "attempt": attempt, "category": "job_lifecycle"},
+                    extra={
+                        "job_id": job_id,
+                        "job_correlation_id": job_id,
+                        "attempt": attempt,
+                        "category": "job_lifecycle",
+                    },
                 )
                 self._job_repository.update_status(job_id, "failed", "Analysis job was cancelled.")
                 raise
             except ResumeAnalyzerError as exc:
                 logger.warning(
                     "Analysis job failed with expected application error",
-                    extra={"job_id": job_id, "attempt": attempt, "category": "application"},
+                    extra={
+                        "job_id": job_id,
+                        "job_correlation_id": job_id,
+                        "attempt": attempt,
+                        "category": "application",
+                    },
                 )
                 self._job_repository.update_status(job_id, "failed", exc.safe_message)
                 return
@@ -123,12 +143,22 @@ class AnalysisJobService:
                 if attempt <= self._max_retries:
                     logger.warning(
                         "Analysis job attempt failed and will retry",
-                        extra={"job_id": job_id, "attempt": attempt, "category": "retry"},
+                        extra={
+                            "job_id": job_id,
+                            "job_correlation_id": job_id,
+                            "attempt": attempt,
+                            "category": "retry",
+                        },
                     )
                     continue
                 logger.exception(
                     "Analysis job failed after retries",
-                    extra={"job_id": job_id, "attempt": attempt, "category": "unexpected"},
+                    extra={
+                        "job_id": job_id,
+                        "job_correlation_id": job_id,
+                        "attempt": attempt,
+                        "category": "unexpected",
+                    },
                 )
                 self._job_repository.update_status(
                     job_id, "failed", JobProcessingError.safe_message

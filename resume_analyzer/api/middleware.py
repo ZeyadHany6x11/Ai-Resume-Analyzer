@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
+
+logger = logging.getLogger(__name__)
 
 
 async def request_context_middleware(
@@ -20,4 +23,15 @@ async def request_context_middleware(
 
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time-Ms"] = f"{duration_ms:.2f}"
+    logger.debug(
+        "Request completed",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": round(duration_ms, 2),
+            "category": "request_lifecycle",
+        },
+    )
     return response

@@ -36,7 +36,10 @@ async def resume_analyzer_exception_handler(
 ) -> JSONResponse:
     logger.warning(
         "Expected application error",
-        extra={"request_id": getattr(request.state, "request_id", None), "category": "application"},
+        extra={
+            "request_id": getattr(request.state, "request_id", None),
+            "category": "application",
+        },
     )
     return error_response(
         request,
@@ -60,7 +63,10 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     logger.warning(
         "Request validation failed",
-        extra={"request_id": getattr(request.state, "request_id", None), "category": "validation"},
+        extra={
+            "request_id": getattr(request.state, "request_id", None),
+            "category": "validation",
+        },
     )
     return error_response(
         request,
@@ -73,7 +79,10 @@ async def validation_exception_handler(
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception(
         "Unhandled API error",
-        extra={"request_id": getattr(request.state, "request_id", None), "category": "unexpected"},
+        extra={
+            "request_id": getattr(request.state, "request_id", None),
+            "category": "unexpected",
+        },
     )
     return error_response(
         request,
