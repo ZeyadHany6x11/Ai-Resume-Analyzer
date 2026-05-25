@@ -76,11 +76,15 @@ uvicorn resume_analyzer.api.main:app --reload
 
 Open `http://127.0.0.1:8000/docs` for interactive API docs.
 
+Versioned routes are available under `/api/v1`. Existing unversioned routes
+remain available for compatibility.
+
 ### API Flow
 
 - `GET /health`
 - `POST /analyses/text`
 - `POST /analyses/file`
+- `GET /analyses?status=completed&limit=50&offset=0`
 - `GET /analyses/{analysis_id}/status`
 - `GET /analyses/{analysis_id}`
 
@@ -110,8 +114,66 @@ Copy `.env.example` to `.env` and adjust values as needed.
 | `RESUME_ANALYZER_SEMANTIC_WEIGHT` | `0.6` | Semantic score weight |
 | `RESUME_ANALYZER_SKILL_WEIGHT` | `0.4` | Skill overlap weight |
 | `RESUME_ANALYZER_MAX_UPLOAD_SIZE_MB` | `10` | Intended upload size limit |
+| `RESUME_ANALYZER_JOB_MAX_RETRIES` | `2` | Retry count for unexpected job failures |
+| `RESUME_ANALYZER_JOB_TIMEOUT_SECONDS` | `120` | Timeout budget used to classify slow jobs |
+| `RESUME_ANALYZER_STALE_JOB_AGE_SECONDS` | `3600` | Age threshold for stale job cleanup |
 
 SQLite tables are created automatically when repository-backed workflows run.
+
+## Docker
+
+Build the shared image:
+
+```bash
+docker compose build
+```
+
+Run FastAPI and Streamlit together:
+
+```bash
+docker compose up
+```
+
+Run in the background:
+
+```bash
+docker compose up -d
+```
+
+Check service health:
+
+```bash
+docker compose ps
+```
+
+View logs:
+
+```bash
+docker compose logs -f api
+docker compose logs -f streamlit
+```
+
+Stop services:
+
+```bash
+docker compose down
+```
+
+The API listens on `http://localhost:8000` and Streamlit listens on
+`http://localhost:8501`. SQLite persistence is mounted at `./data`, which is
+ignored by git.
+
+## CI
+
+GitHub Actions runs on `push` and `pull_request` using Python 3.11 with pip
+dependency caching. The workflow runs:
+
+```bash
+ruff check .
+black --check .
+pytest
+python -m compileall .
+```
 
 ## Testing
 
