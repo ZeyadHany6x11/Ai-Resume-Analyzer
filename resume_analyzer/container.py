@@ -6,7 +6,9 @@ from resume_analyzer.config import get_settings
 from resume_analyzer.embeddings import HybridSimilarityProvider
 from resume_analyzer.parsers import DocumentParser
 from resume_analyzer.ranking import RankingService
+from resume_analyzer.repositories import SQLiteAnalysisJobRepository, SQLiteAnalysisResultRepository
 from resume_analyzer.services import (
+    AnalysisJobService,
     ResumeAnalysisService,
     SkillExtractionService,
     TextPreprocessingService,
@@ -33,3 +35,17 @@ def build_analysis_service() -> ResumeAnalysisService:
 @lru_cache(maxsize=1)
 def get_analysis_service() -> ResumeAnalysisService:
     return build_analysis_service()
+
+
+def build_job_service() -> AnalysisJobService:
+    settings = get_settings()
+    return AnalysisJobService(
+        job_repository=SQLiteAnalysisJobRepository(settings.database_path),
+        result_repository=SQLiteAnalysisResultRepository(settings.database_path),
+        analysis_service=get_analysis_service(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_job_service() -> AnalysisJobService:
+    return build_job_service()
