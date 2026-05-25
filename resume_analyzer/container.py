@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from resume_analyzer.cache import InMemoryTTLCache
 from resume_analyzer.config import get_settings
-from resume_analyzer.embeddings import HybridSimilarityProvider
+from resume_analyzer.embeddings import CachedSimilarityProvider, HybridSimilarityProvider
 from resume_analyzer.parsers import DocumentParser
 from resume_analyzer.ranking import RankingService
 from resume_analyzer.repositories import SQLiteAnalysisJobRepository, SQLiteAnalysisResultRepository
@@ -19,12 +20,19 @@ from resume_analyzer.utils import configure_logging
 def build_analysis_service() -> ResumeAnalysisService:
     settings = get_settings()
     configure_logging(settings)
+    similarity_provider = HybridSimilarityProvider(model_name=settings.embedding_model_name)
+    if settings.cache_enabled:
+        similarity_provider = CachedSimilarityProvider(
+            provider=similarity_provider,
+            cache=InMemoryTTLCache(default_ttl_seconds=settings.cache_ttl_seconds),
+            ttl_seconds=settings.cache_ttl_seconds,
+        )
 
     return ResumeAnalysisService(
         parser=DocumentParser(),
         preprocessor=TextPreprocessingService(),
         skill_extractor=SkillExtractionService(),
-        similarity_provider=HybridSimilarityProvider(model_name=settings.embedding_model_name),
+        similarity_provider=similarity_provider,
         ranking_service=RankingService(
             semantic_weight=settings.semantic_weight,
             skill_weight=settings.skill_weight,
