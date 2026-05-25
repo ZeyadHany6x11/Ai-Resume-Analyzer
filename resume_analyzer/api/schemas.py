@@ -21,6 +21,21 @@ class AnalysisStatusResponse(BaseModel):
     error_message: str | None = None
 
 
+class AnalysisJobListItem(BaseModel):
+    analysis_id: str
+    status: str
+    input_type: str
+    created_at: str | None = None
+    updated_at: str | None = None
+    error_message: str | None = None
+
+
+class AnalysisJobListResponse(BaseModel):
+    jobs: list[AnalysisJobListItem]
+    limit: int
+    offset: int
+
+
 class AnalysisResultResponse(BaseModel):
     analysis_id: str
     status: str

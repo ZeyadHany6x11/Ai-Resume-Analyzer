@@ -76,6 +76,14 @@ class AnalysisJobService:
         result = self._result_repository.get_by_job_id(job_id)
         return result.result if result else None
 
+    def list_jobs(
+        self,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AnalysisJobRecord]:
+        return self._job_repository.list(status=status, limit=limit, offset=offset)
+
     def run_analysis_job(self, job_id: str) -> None:
         job = self._job_repository.get(job_id)
         if job is None:

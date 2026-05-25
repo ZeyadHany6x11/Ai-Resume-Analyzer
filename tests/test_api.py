@@ -76,6 +76,23 @@ def test_versioned_text_endpoint_preserves_existing_behavior(tmp_path):
     assert "analysis_id" in response.json()
 
 
+def test_list_analyses_endpoint_returns_paginated_jobs(tmp_path):
+    client = build_test_client(tmp_path)
+    client.post(
+        "/api/v1/analyses/text",
+        json={"cv_text": "Python resume", "job_description": "Python job"},
+    )
+
+    response = client.get("/api/v1/analyses", params={"status": "completed", "limit": 10})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["limit"] == 10
+    assert body["offset"] == 0
+    assert len(body["jobs"]) == 1
+    assert body["jobs"][0]["status"] == "completed"
+
+
 def test_request_headers_include_trace_and_timing(tmp_path):
     client = build_test_client(tmp_path)
 

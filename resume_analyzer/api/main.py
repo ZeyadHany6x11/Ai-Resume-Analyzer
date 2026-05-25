@@ -23,6 +23,8 @@ from resume_analyzer.api.errors import (
 )
 from resume_analyzer.api.middleware import request_context_middleware
 from resume_analyzer.api.schemas import (
+    AnalysisJobListItem,
+    AnalysisJobListResponse,
     AnalysisResultResponse,
     AnalysisStatusResponse,
     AnalysisSubmissionResponse,
@@ -112,6 +114,31 @@ def get_analysis_status(
         analysis_id=job.id,
         status=job.status,
         error_message=job.error_message,
+    )
+
+
+@router.get("/analyses", response_model=AnalysisJobListResponse)
+def list_analyses(
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    job_service: AnalysisJobService = Depends(get_job_service_dependency),
+) -> AnalysisJobListResponse:
+    jobs = job_service.list_jobs(status=status, limit=limit, offset=offset)
+    return AnalysisJobListResponse(
+        jobs=[
+            AnalysisJobListItem(
+                analysis_id=job.id,
+                status=job.status,
+                input_type=job.input_type,
+                created_at=job.created_at,
+                updated_at=job.updated_at,
+                error_message=job.error_message,
+            )
+            for job in jobs
+        ],
+        limit=limit,
+        offset=offset,
     )
 
 
