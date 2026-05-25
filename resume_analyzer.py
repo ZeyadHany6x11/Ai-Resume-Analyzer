@@ -9,26 +9,26 @@ Core analysis module with modular functions for:
 - Report generation
 """
 
+import io
 import re
 import string
-import io
 import warnings
-from typing import Union
+
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+
+from resume_analyzer.embeddings import HybridSimilarityProvider
+from resume_analyzer.parsers import DocumentParser
+from resume_analyzer.ranking import RankingService
+from resume_analyzer.services import SkillExtractionService
+from skills_list import SKILLS_DATABASE
 
 warnings.filterwarnings("ignore")
 
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-import PyPDF2
-
-from skills_list import SKILLS_DATABASE
-
-
 # ── NLTK resource bootstrap ──────────────────────────────────────────────────
+
 
 def _ensure_nltk_resources() -> None:
     """Download required NLTK data if not already present."""
@@ -52,6 +52,7 @@ _ensure_nltk_resources()
 
 _MODEL = None
 _USE_SBERT = False
+_SIMILARITY_PROVIDER = HybridSimilarityProvider()
 
 
 def _try_load_sbert():
@@ -59,6 +60,7 @@ def _try_load_sbert():
     global _MODEL, _USE_SBERT
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
+
         _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
         _USE_SBERT = True
     except Exception:
@@ -68,7 +70,8 @@ def _try_load_sbert():
 
 # ── 1. Text Extraction ───────────────────────────────────────────────────────
 
-def extract_text(source: Union[bytes, str, io.BytesIO]) -> str:
+
+def extract_text(source: bytes | str | io.BytesIO) -> str:
     """
     Extract plain text from a PDF (bytes / BytesIO) or a raw text string.
 
@@ -82,22 +85,11 @@ def extract_text(source: Union[bytes, str, io.BytesIO]) -> str:
     str
         Extracted text.
     """
-    if isinstance(source, str):
-        return source
-
-    if isinstance(source, (bytes, io.BytesIO)):
-        stream = io.BytesIO(source) if isinstance(source, bytes) else source
-        try:
-            reader = PyPDF2.PdfReader(stream)
-            pages = [page.extract_text() or "" for page in reader.pages]
-            return "\n".join(pages)
-        except Exception as exc:
-            raise ValueError(f"Failed to read PDF: {exc}") from exc
-
-    raise TypeError(f"Unsupported source type: {type(source)}")
+    return DocumentParser().extract_text(source)
 
 
 # ── 2. Text Preprocessing ────────────────────────────────────────────────────
+
 
 def preprocess_text(text: str) -> list:
     """
@@ -140,6 +132,7 @@ def preprocess_text(text: str) -> list:
 
 # ── 3. Skill Extraction ──────────────────────────────────────────────────────
 
+
 def extract_skills(text: str, extra_skills=None) -> set:
     """
     Identify skills from text using keyword matching against the predefined
@@ -158,38 +151,11 @@ def extract_skills(text: str, extra_skills=None) -> set:
     set[str]
         Normalised set of detected skill names.
     """
-    text_lower = text.lower()
-    skill_pool = SKILLS_DATABASE[:]
-    if extra_skills:
-        skill_pool += [s.lower() for s in extra_skills]
-
-    found: set = set()
-
-    for skill in skill_pool:
-        skill_lower = skill.lower()
-        if " " not in skill_lower:
-            # Whole-word match for single-word skills
-            pattern = r"\b" + re.escape(skill_lower) + r"\b"
-            if re.search(pattern, text_lower):
-                found.add(skill_lower)
-        else:
-            # Substring match for multi-word skills
-            if skill_lower in text_lower:
-                found.add(skill_lower)
-
-    # Regex bonus: catch "X years of Python" patterns
-    pattern_years = re.compile(
-        r"\d+\+?\s+years?\s+(?:of\s+)?([a-z][a-z0-9+#.\-/]+)", re.IGNORECASE
-    )
-    for match in pattern_years.finditer(text_lower):
-        candidate = match.group(1).strip().lower()
-        if candidate in SKILLS_DATABASE:
-            found.add(candidate)
-
-    return found
+    return SkillExtractionService(SKILLS_DATABASE).extract(text, extra_skills)
 
 
 # ── 4. Semantic Similarity ───────────────────────────────────────────────────
+
 
 def compute_similarity(cv_text: str, jd_text: str) -> float:
     """
@@ -210,30 +176,16 @@ def compute_similarity(cv_text: str, jd_text: str) -> float:
     float
         Cosine similarity in [0, 1].
     """
-    global _USE_SBERT, _MODEL
-
-    # Try to load SBERT on first call
-    if _MODEL is None and not _USE_SBERT:
-        _try_load_sbert()
-
-    if _USE_SBERT and _MODEL is not None:
-        embeddings = _MODEL.encode([cv_text, jd_text])
-        score = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
-        return float(score)
-
-    # TF-IDF fallback
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform([cv_text, jd_text])
-    score = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
-    return float(score)
+    return _SIMILARITY_PROVIDER.compute(cv_text, jd_text)
 
 
 def similarity_method() -> str:
     """Return which similarity method was used."""
-    return "SentenceTransformers (all-MiniLM-L6-v2)" if _USE_SBERT else "TF-IDF Cosine Similarity"
+    return _SIMILARITY_PROVIDER.method
 
 
 # ── 5. Report Generation ─────────────────────────────────────────────────────
+
 
 def generate_report(
     similarity_score: float,
@@ -268,79 +220,19 @@ def generate_report(
         - similarity_score  : float
         - skill_overlap     : float
     """
-    matched_skills = sorted(cv_skills & jd_skills)
-    missing_skills = sorted(jd_skills - cv_skills)
-    extra_skills = sorted(cv_skills - jd_skills)
-
-    # Blend: semantic similarity (60%) + skill overlap (40%)
-    skill_ratio = len(matched_skills) / len(jd_skills) if jd_skills else 0.0
-    blend = 0.6 * similarity_score + 0.4 * skill_ratio
-    match_score = min(100, round(blend * 100))
-
-    if match_score >= 80:
-        strength = "Excellent"
-    elif match_score >= 60:
-        strength = "Good"
-    elif match_score >= 40:
-        strength = "Fair"
-    else:
-        strength = "Needs Work"
-
-    suggestions: list = []
-
-    if missing_skills:
-        top_missing = missing_skills[:5]
-        suggestions.append(
-            f"Acquire or highlight these key skills: **{', '.join(top_missing)}**."
-        )
-        suggestions.append(
-            "Add relevant personal or open-source projects that showcase the missing skills."
-        )
-        suggestions.append(
-            "Consider online courses (Coursera, Udemy, edX, freeCodeCamp) or certifications for skill gaps."
-        )
-
-    if match_score < 60:
-        suggestions.append(
-            "Tailor your CV summary/objective to mirror the exact language and keywords in the job description."
-        )
-
-    if not any(kw in cv_tokens for kw in ["project", "projects", "built", "developed", "created", "implemented"]):
-        suggestions.append(
-            "Add a dedicated **Projects** section with brief descriptions and technologies used."
-        )
-
-    if not any(kw in cv_tokens for kw in ["certificate", "certification", "certified", "credential"]):
-        suggestions.append(
-            "Listing relevant certifications can significantly strengthen your application."
-        )
-
-    if len(extra_skills) > 10:
-        suggestions.append(
-            "You have many skills — make sure the most job-relevant ones are prominently placed near the top of your CV."
-        )
-
-    if not suggestions:
-        suggestions.append(
-            "Great fit! Ensure your CV is concise, well-formatted, ATS-friendly, and free of typos."
-        )
-
-    return {
-        "match_score": match_score,
-        "matched_skills": matched_skills,
-        "missing_skills": missing_skills,
-        "extra_skills": extra_skills,
-        "suggestions": suggestions,
-        "strength": strength,
-        "similarity_score": round(similarity_score * 100, 1),
-        "skill_overlap": round(skill_ratio * 100, 1),
-    }
+    return RankingService().generate_report(
+        similarity_score=similarity_score,
+        cv_skills=cv_skills,
+        jd_skills=jd_skills,
+        cv_tokens=cv_tokens,
+    )
 
 
 # ── Public pipeline ──────────────────────────────────────────────────────────
 
+
 def analyze(
-    cv_source: Union[bytes, str, io.BytesIO],
+    cv_source: bytes | str | io.BytesIO,
     jd_text: str,
 ) -> dict:
     """
