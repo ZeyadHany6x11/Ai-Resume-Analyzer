@@ -62,9 +62,63 @@ def test_text_analysis_endpoint_creates_completed_background_job(tmp_path):
     assert result.json()["result"]["match_score"] == 84
 
 
+def test_versioned_text_endpoint_preserves_existing_behavior(tmp_path):
+    client = build_test_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/analyses/text",
+        json={"cv_text": "Python resume", "job_description": "Python job"},
+    )
+
+    assert response.status_code == 202
+    assert "analysis_id" in response.json()
+
+
+def test_request_headers_include_trace_and_timing(tmp_path):
+    client = build_test_client(tmp_path)
+
+    response = client.get("/health", headers={"X-Request-ID": "req-test"})
+
+    assert response.headers["X-Request-ID"] == "req-test"
+    assert float(response.headers["X-Process-Time-Ms"]) >= 0
+
+
 def test_missing_analysis_returns_404(tmp_path):
     client = build_test_client(tmp_path)
 
     response = client.get("/analyses/missing/status")
 
     assert response.status_code == 404
+    assert response.json() == {
+        "error": {
+            "code": "http_error",
+            "message": "Analysis job not found.",
+            "request_id": response.headers["X-Request-ID"],
+        }
+    }
+
+
+def test_file_upload_rejects_non_pdf(tmp_path):
+    client = build_test_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/analyses/file",
+        data={"job_description": "Python job"},
+        files={"file": ("resume.txt", b"plain text", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "AnalysisValidationError"
+
+
+def test_file_upload_rejects_empty_pdf(tmp_path):
+    client = build_test_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/analyses/file",
+        data={"job_description": "Python job"},
+        files={"file": ("resume.pdf", b"", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "Resume and job description inputs are required."

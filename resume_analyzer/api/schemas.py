@@ -25,3 +25,13 @@ class AnalysisResultResponse(BaseModel):
     analysis_id: str
     status: str
     result: dict[str, Any] | None = None
+
+
+class ErrorBody(BaseModel):
+    code: str
+    message: str
+    request_id: str | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorBody
